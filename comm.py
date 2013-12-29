@@ -123,20 +123,24 @@ class TelemetryReader():
 
     def read_gps(self):
         answer = self.MSPquery(MSP_RAW_GPS)
-        lat_list = answer[2:6]
-        long_list = answer[6:10]
-        latitude = self.decode32(lat_list)/10000000.0
-        longitude = self.decode32(long_list)/10000000.0
-        #print longitude,latitude
-        return longitude,latitude
+        if answer:
+            lat_list = answer[2:6]
+            long_list = answer[6:10]
+            latitude = self.decode32(lat_list)/10000000.0
+            longitude = self.decode32(long_list)/10000000.0
+            #print longitude,latitude
+            return longitude,latitude
+        return (0,0)
 
     def read_attitude(self):
         answer = self.MSPquery(MSP_ATTITUDE)
-        #print answer
-        roll = -self.decode16(answer[0:2])/10.0
-        pitch = self.decode16(answer[2:4])/10.0
-        #print roll,pitch
-        return roll,pitch
+        if answer:
+            #print answer
+            roll = -self.decode16(answer[0:2])/10.0
+            pitch = self.decode16(answer[2:4])/10.0
+            #print roll,pitch
+            return roll,pitch
+        return (0,0)
 
 #
 #
