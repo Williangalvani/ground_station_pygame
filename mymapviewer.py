@@ -46,6 +46,7 @@ class MyApp(object):
         self.dy = 0
         self.to_draw = True
         self.sprites = None
+        self.draw_gui_only_flag = False
         # Connect signals
         self.tile_loader = TileLoader(self)
         #self.window.show()
@@ -186,14 +187,14 @@ class MyApp(object):
     def set_tracked_position(self,longitude,latitude):
         if self.tracked[0] != longitude or self.tracked[1] != latitude:
             self.tracked = (longitude,latitude)
-            self.queue_draw()
+            self.queue_draw(True)
 
     def set_attitude(self,roll,pitch,yaw=0):
         if self.horizon.tilt != pitch or self.horizon.roll != roll or self.horizon.yaw != yaw:
             self.horizon.tilt = pitch
             self.horizon.roll = roll
             self.horizon.yaw = yaw
-            self.queue_draw()
+            self.queue_draw(True)
 
 
     def draw_tiles(self):
@@ -235,11 +236,19 @@ class MyApp(object):
 
     def draw(self):
         self.draw_tiles()
+        self.draw_gui()
+        pygame.display.flip()
+
+    def draw_gui(self):
         self.drawInfo()
         self.draw_cross()
         self.draw_points()
         self.draw_tracked_object()
         self.draw_instruments()
+
+    def draw_gui_only(self):
+        self.sprites.draw(self.screen)
+        self.draw_gui()
         pygame.display.flip()
 
     def draw_instruments(self):
@@ -248,14 +257,17 @@ class MyApp(object):
         self.screen.blit(self.horizon.newsurf,(0,bottom))
 
 
-    def queue_draw(self):
-        self.to_draw=1
+    def queue_draw(self,gui_only=False):
+        self.to_draw = not gui_only
+        self.draw_gui_only_flag = gui_only
 
     def main_loop(self):
         """This is the Main Loop of the Game"""
         while 1:
             if self.to_draw:
                 self.draw()
+            if self.draw_gui_only_flag:
+                self.draw_gui_only()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.tile_loader.run = 0

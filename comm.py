@@ -31,10 +31,13 @@ class TelemetryReader():
 
     def loop(self):
         while(self.run):
-            lat,long = self.read_gps()
-            self.window.set_tracked_position(lat,long)
-            time.sleep(0.1)
-            self.window.set_attitude(*self.read_attitude())
+            for i in range(100):
+                if i%10==0:
+                    lat,long = self.read_gps()
+                    self.window.set_tracked_position(lat,long)
+                else:
+                    self.window.set_attitude(*self.read_attitude())
+                #time.sleep(0.01)
 
     def stop(self):
         self.run = False
@@ -79,6 +82,7 @@ class TelemetryReader():
         #print checksum, receivedChecksum
         if command != expectedCommand:
             print "commands dont match!" , command, expectedCommand
+            self.ser.flushInput()
             return None
         if checksum == receivedChecksum:
             return data
@@ -87,7 +91,7 @@ class TelemetryReader():
             return None
 
     def MSPquery(self,command    ):
-            self.ser.flushInput()
+            #self.ser.flushInput()
             o = bytearray('$M<')
             #print dir(o)
             c = 0;
@@ -97,9 +101,11 @@ class TelemetryReader():
             o += chr(c);
             answer = None
             while (not answer):
+                    #print "writing" , o
                     self.ser.write(o)
-                    self.ser.flushInput()
+                    #self.ser.flushInput()
                     answer = self.receiveAnswer(command)
+            #print answer
             return answer
 
 
