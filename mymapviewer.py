@@ -1,52 +1,42 @@
-from os.path import abspath, dirname, join
+from os.path import abspath, dirname
 
 #http://maps.googleapis.com/maps/api/staticmap?center=#X,#Y&zoom=#Z&size=200x200&sensor=false
 WHERE_AM_I = abspath(dirname(__file__))
 from tileLoader import TileLoader
 from math import ceil
 from datetime import datetime
-import time
-
-
-
-import os, sys
+from horizon.horizon import Horizon
+import sys
 import pygame
 from pygame.locals import *
+from comm import TelemetryReader
 
 if not pygame.font: print 'Warning, fonts disabled'
 if not pygame.mixer: print 'Warning, sound disabled'
 
 
-
-
-import math
 #   import pdb
 
 class MyApp(object):
-    """The Main PyMan Class - This class handles the main
-    initialization and creating of the Game."""
 
     def __init__(self, width=800,height=600):
-        """Initialize"""
-        """Initialize PyGame"""
         pygame.init()
-        """Set the window Size"""
         self.width = width
         self.height = height
 
         """Create the Screen"""
-        self.screen = pygame.display.set_mode((self.width
-                                               , self.height))
-
+        self.screen = pygame.display.set_mode((self.width,self.height),HWSURFACE | RESIZABLE | DOUBLEBUF,32 )
         self.last_scroll = datetime.now()
 
 
         self.window = self.screen
-        self.FPS = 15
+        self.FPS = 60
         self.FPSCLOCK = pygame.time.Clock()
         self.longitude = -48.519688
         self.latitude =  -27.606899
         self.points = [(self.longitude,self.latitude),(0.0,0.0),(180,36.8),(-47.886829,-15.793751)]
+        self.tracked = [0,0]
+        self.tracking = True
         self.zoom = 2
         self.button = 0
         self.x,self.y = 0,0
@@ -60,6 +50,9 @@ class MyApp(object):
         self.tile_loader = TileLoader(self)
         #self.window.show()
         self.sprites = pygame.sprite.Group()
+        self.instruments = pygame.sprite.Group()
+        self.horizon = Horizon()
+        self.telemetry_reader = TelemetryReader(self)
         self.main_loop()
         print "init done"
 
@@ -103,6 +96,8 @@ class MyApp(object):
         self.longitude = long
         self.latitude = lat
 
+
+
     def on_move(self,event):
         x, y = event.pos
         dx = x-self.pointer_x
@@ -143,39 +138,71 @@ class MyApp(object):
 
 
     def drawInfo(self):
-        font = pygame.font.Font(None, 36)
         pending = len(self.tile_loader.pending_tiles) + len(self.tile_loader.loading_tiles)
-        text = font.render("{0} pending tiles".format(pending), 1, (10, 10, 10))
-        textpos = text.get_rect()
-        textpos.centerx = self.screen.get_rect().centerx
-        textpos.centery = self.screen.get_rect().bottom-10
-        self.screen.blit(text, textpos)
+        font = pygame.font.Font(None, 24)
+        height = 0
+        width = 0
+        texts = ["{0} pending tiles".format(pending),
+                 "long:{0}".format(self.longitude),
+                 "lat: {0}".format(self.latitude)]
+        gtexts = [font.render(text, 1, (10, 10, 10)) for text in texts]
 
-        text = font.render("long:{0}\nlat: {1}".format(self.longitude,self.latitude), 1, (10, 10, 10))
-        textpos = text.get_rect()
-        textpos.centerx = self.screen.get_rect().centerx
-        self.screen.blit(text, textpos)
+        try:
+            height = gtexts[0].get_rect().height
+            width = 0
+            for text in gtexts:
+                twidth = text.get_rect().width
+                if twidth > width:
+                    width = twidth
+        except:
+            pass
 
+
+        gui = pygame.Surface((width,height*len(gtexts)))
+        gui.set_alpha(180)
+        gui.fill((127,127,127))
+        self.screen.blit(gui,(0,0))
+
+
+        current_z = 10
+        for text in gtexts:
+            textpos = text.get_rect()
+            textpos.centery = current_z
+            current_z = current_z + textpos.height
+            self.screen.blit(text, textpos)
 
 
     def draw_points(self):
         for point in self.points:
             x,y = self.tile_loader.dcord_to_dpix(point[0],self.longitude,point[1],self.latitude,self.zoom)
-            #print x,y
             self.draw_center_circle(x+self.width/2,y+self.height/2)
 
+    def draw_tracked_object(self):
+        if self.tracking:
+            point = self.tracked
+            x,y = self.tile_loader.dcord_to_dpix(point[0],self.longitude,point[1],self.latitude,self.zoom)
+            self.draw_center_circle(x+self.width/2,y+self.height/2)
 
-    #@profile
+    def set_tracked_position(self,longitude,latitude):
+        if self.tracked[0] != longitude or self.tracked[1] != latitude:
+            self.tracked = (longitude,latitude)
+            self.queue_draw()
+
+    def set_attitude(self,roll,pitch,yaw=0):
+        if self.horizon.tilt != pitch or self.horizon.roll != roll or self.horizon.yaw != yaw:
+            self.horizon.tilt = pitch
+            self.horizon.roll = roll
+            self.horizon.yaw = yaw
+            self.queue_draw()
+
+
     def draw_tiles(self):
-        """Draw something into the buffer"""
         span_x = self.width
         span_y = self.height
         tiles_x = int(ceil(span_x/256.0))
         tiles_y = int(ceil(span_y/256.0))
 
-        #cc = cairo.Context(db)
         tiles = self.tile_loader.load_area(self.longitude,self.latitude,self.zoom,tiles_x,tiles_y)
-        #print tiles
         tile_number=0
         line_number=0
 
@@ -187,7 +214,7 @@ class MyApp(object):
 
         xtiles = len(tiles[0])
         ytiles = len(tiles)
-        #print len(tiles),len(tiles[0])
+
         self.screen.fill((1,1,1))
         for line in tiles:
             for tile in line:
@@ -204,15 +231,22 @@ class MyApp(object):
 
 
         self.sprites.draw(self.screen)
-        self.drawInfo()
-        #db.flush()
         self.to_draw = False
 
     def draw(self):
         self.draw_tiles()
+        self.drawInfo()
         self.draw_cross()
         self.draw_points()
+        self.draw_tracked_object()
+        self.draw_instruments()
         pygame.display.flip()
+
+    def draw_instruments(self):
+        bottom = self.height-self.horizon.newsurf.get_rect().height
+        self.horizon.update()
+        self.screen.blit(self.horizon.newsurf,(0,bottom))
+
 
     def queue_draw(self):
         self.to_draw=1
@@ -225,6 +259,7 @@ class MyApp(object):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.tile_loader.run = 0
+                    self.telemetry_reader.run = False
                     sys.exit()
                 elif event.type == pygame.MOUSEMOTION:
                     self.on_move(event)
@@ -232,7 +267,12 @@ class MyApp(object):
                     self.on_click(event)
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self.on_release(event)
-                    #print "mouse at (%d, %d)" % event.pos
+                elif event.type == pygame.VIDEORESIZE:
+                    self.width = event.w
+                    self.height= event.h
+                    self.screen = pygame.display.set_mode((self.width
+                                               , self.height),RESIZABLE)
+                    self.draw()
             self.FPSCLOCK.tick(self.FPS)
 
 

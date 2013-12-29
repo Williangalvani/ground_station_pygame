@@ -1,14 +1,11 @@
 __author__ = 'Will'
 
 from math import sin, cos, log , pi
-from imageCache import ImageLoader
 import threading
-from collections import deque
 import time
-import traceback
 
-import pygame
-from helpers import *
+from imageCache import ImageLoader
+
 
 class FuncThread(threading.Thread):
     def __init__(self, target, *args):
@@ -20,9 +17,6 @@ class FuncThread(threading.Thread):
     def run(self):
         self._target(*self._args)
 
-
-
-from imageCache import Tile
 
 class TileLoader():
     def __init__(self,window):
