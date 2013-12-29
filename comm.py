@@ -37,7 +37,7 @@ class TelemetryReader():
                     self.window.set_tracked_position(lat,long)
                 else:
                     self.window.set_attitude(*self.read_attitude())
-                #time.sleep(0.01)
+                time.sleep(0.01)
 
     def stop(self):
         self.run = False
